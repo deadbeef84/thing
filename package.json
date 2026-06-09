@@ -1,0 +1,15 @@
+{
+  "name": "@deadbeef84/thing",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "index.js",
+  "prettier": {
+    "semi": false,
+    "singleQuote": true
+  },
+  "dependencies": {
+    "@nxtedition/deepstream.io-client-js": "^32.1.0",
+    "lodash": "^4.18.1",
+    "rxjs": "^7.8.2"
+  }
+}
