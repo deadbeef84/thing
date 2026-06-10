@@ -1,5 +1,6 @@
 import React from 'react'
-import { computed, pipe, Thing } from '@deadbeef84/thing'
+import { computed, Thing } from '@deadbeef84/thing'
+import { pipe } from '@deadbeef84/thing/util.js'
 
 export function useComputed(thing, suspend) {
   const [state, setState] = React.useState({
