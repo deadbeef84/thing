@@ -2,10 +2,6 @@ let tracked
 const listeners = new Set()
 const refCounts = new Map()
 
-export function debug() {
-  return { tracked, listeners, refCounts }
-}
-
 export function notifyChange(thing) {
   listeners.forEach((listener) => {
     if (listener.tracked.has(thing)) {
