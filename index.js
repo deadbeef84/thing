@@ -185,6 +185,7 @@ export function observe(fnOrThing, observer) {
       }
 
       // Decrease ref counts for things that are no longer tracked
+      const prevTrackedSize = listener.tracked.size
       for (const thing of listener.tracked) {
         const ref = refCounts.get(thing)
         if (--ref.count === 0) {
@@ -198,6 +199,11 @@ export function observe(fnOrThing, observer) {
 
       // If there are no tracked things, we can consider the observation complete
       if (listener.tracked.size === 0) {
+        // Only emit next when there were also no previous deps (pure constant fn);
+        // if deps existed before they all completed, the value was already emitted.
+        if (result !== kSuspended && prevTrackedSize === 0) {
+          observer.next?.(result)
+        }
         observer.complete?.()
         disposer()
         return
