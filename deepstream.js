@@ -1,5 +1,5 @@
 import deepstream from '@nxtedition/deepstream.io-client-js'
-import { kSuspended, Thing } from './index.js'
+import { kSuspended, reportObserved, Thing } from './index.js'
 
 const ds = deepstream(
   typeof process === 'undefined'
@@ -33,9 +33,9 @@ export class Record extends Thing {
     record.unref()
 
     super(value, (thing) => {
-      thing.record ??= ds.record.getRecord(name).subscribe(onUpdate, thing)
+      thing._record ??= ds.record.getRecord(name).subscribe(onUpdate, thing)
       return () => {
-        thing.record.unsubscribe(onUpdate, thing).unref()
+        thing._record.unsubscribe(onUpdate, thing).unref()
       }
     })
 
@@ -43,20 +43,33 @@ export class Record extends Thing {
   }
 
   get data() {
-    this.record ??= ds.record.getRecord(this.name).subscribe(onUpdate, this)
     return this.value
   }
 
   get state() {
-    this.record ??= ds.record.getRecord(this.name).subscribe(onUpdate, this)
     reportObserved(this, this.onBecomeObserved)
-    return this.record.state
+
+    if (this._record) {
+      return this._record.state
+    }
+    
+    const record = ds.record.getRecord(this.name)
+    const state = record.state
+    record.unref()
+    return state
   }
 
   get version() {
-    this.record ??= ds.record.getRecord(this.name).subscribe(onUpdate, this)
     reportObserved(this, this.onBecomeObserved)
-    return this.record.version
+
+    if (this._record) {
+      return this._record.version
+    }
+    
+    const record = ds.record.getRecord(this.name)
+    const version = record.version
+    record.unref()
+    return version
   }
 }
 
