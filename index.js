@@ -19,10 +19,17 @@ export function reportObserved(thing, onBecomeObserved) {
 
   let ref = refCounts.get(thing)
   if (!ref) {
-    refCounts.set(thing, {
+    ref = {
       count: 1,
-      onBecomeUnobserved: onBecomeObserved?.call(thing, thing),
-    })
+      onBecomeUnobserved: null,
+    }
+    refCounts.set(thing, ref)
+    // TODO: what if this fails?
+    ref.onBecomeUnobserved = onBecomeObserved?.call(thing, thing)
+    // Unsure if this can actually happen...
+    if (ref.count <= 0) {
+      throw new Error('invalid ref count')
+    }
   } else {
     ++ref.count
   }
