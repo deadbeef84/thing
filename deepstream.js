@@ -36,6 +36,7 @@ export class Record extends Thing {
       thing._record ??= ds.record.getRecord(name).subscribe(onUpdate, thing)
       return () => {
         thing._record.unsubscribe(onUpdate, thing).unref()
+        thing._record = null
       }
     })
 
