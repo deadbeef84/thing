@@ -11,11 +11,11 @@ export function notifyChange(thing) {
 }
 
 export function reportObserved(thing, onBecomeObserved) {
-  if (!tracked || tracked.has(thing)) {
+  if (!tracked || tracked.things.has(thing)) {
     return
   }
 
-  tracked.add(thing)
+  tracked.things.add(thing)
 
   let ref = refCounts.get(thing)
   if (!ref) {
@@ -24,14 +24,29 @@ export function reportObserved(thing, onBecomeObserved) {
       onBecomeUnobserved: null,
     }
     refCounts.set(thing, ref)
-    // TODO: what if this fails?
-    ref.onBecomeUnobserved = onBecomeObserved?.call(thing, thing)
-    // Unsure if this can actually happen...
-    if (ref.count <= 0) {
-      throw new Error('invalid ref count')
-    }
+    // Start sources only after the listener has registered its dependencies.
+    tracked.activate.push(() => {
+      if (ref.count === 0) {
+        return
+      }
+      ref.onBecomeUnobserved = onBecomeObserved?.call(thing, thing)
+      // A synchronous source may finish before returning its cleanup function.
+      if (ref.count === 0) {
+        ref.onBecomeUnobserved?.()
+      }
+    })
   } else {
     ++ref.count
+  }
+}
+
+function releaseObserved(things) {
+  for (const thing of things) {
+    const ref = refCounts.get(thing)
+    if (--ref.count === 0) {
+      refCounts.delete(thing)
+      ref.onBecomeUnobserved?.()
+    }
   }
 }
 
@@ -176,39 +191,57 @@ export function observe(fnOrThing, observer) {
     }
   }
 
+  let disposed = false
+  let revision = 0
   const listener = {
     tracked: new Set(),
     callback: () => {
-      let oldTrackedValue = tracked
+      if (disposed) {
+        return
+      }
+      const currentRevision = ++revision
+      const oldTrackedValue = tracked
+      const context = { things: new Set(), activate: [] }
 
-      tracked = new Set()
+      tracked = context
       let result = kSuspended
+      let failed = false
+      let error
       try {
         result = fnOrThing instanceof Thing ? fnOrThing.value : fnOrThing()
       } catch (e) {
         if (e !== kSuspended) {
-          observer.error?.(e)
+          failed = true
+          error = e
         }
+      } finally {
+        tracked = oldTrackedValue
       }
 
       // Decrease ref counts for things that are no longer tracked
-      const prevTrackedSize = listener.tracked.size
-      for (const thing of listener.tracked) {
-        const ref = refCounts.get(thing)
-        if (--ref.count === 0) {
-          ref.onBecomeUnobserved?.()
-          refCounts.delete(thing)
-        }
+      const prevTracked = listener.tracked
+      listener.tracked = context.things
+      releaseObserved(prevTracked)
+
+      if (failed) {
+        disposer()
+        observer.error?.(error)
+        return
       }
 
-      listener.tracked = tracked
-      tracked = oldTrackedValue
+      for (const activate of context.activate) {
+        activate()
+      }
+      // Source activation can synchronously rerun or dispose this observation.
+      if (disposed || revision !== currentRevision) {
+        return
+      }
 
       // If there are no tracked things, we can consider the observation complete
       if (listener.tracked.size === 0) {
         // Only emit next when there were also no previous deps (pure constant fn);
         // if deps existed before they all completed, the value was already emitted.
-        if (result !== kSuspended && prevTrackedSize === 0) {
+        if (result !== kSuspended && prevTracked.size === 0) {
           observer.next?.(result)
         }
         observer.complete?.()
@@ -223,20 +256,24 @@ export function observe(fnOrThing, observer) {
   }
 
   const disposer = () => {
-    listeners.delete(listener)
-    for (const thing of listener.tracked) {
-      const ref = refCounts.get(thing)
-      if (--ref.count === 0) {
-        ref.onBecomeUnobserved?.()
-        refCounts.delete(thing)
-      }
+    if (disposed) {
+      return
     }
-    listener.tracked.clear()
+    disposed = true
+    listeners.delete(listener)
+    const prevTracked = listener.tracked
+    listener.tracked = new Set()
+    releaseObserved(prevTracked)
   }
 
   // trigger initial run to populate tracked things and subscribe to changes
-  listener.callback()
   listeners.add(listener)
+  try {
+    listener.callback()
+  } catch (e) {
+    disposer()
+    throw e
+  }
   return disposer
 }
 

@@ -114,4 +114,3 @@ Use this library if you want:
 ## Open questions
 
 - How does this relate to [signals](https://github.com/tc39/proposal-signals)?
-- Can we support proper sync values? E.g `fromRx(rxjs.of(1, 2, 3)).subscribe(console.log)`
