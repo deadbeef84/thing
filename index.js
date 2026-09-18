@@ -130,7 +130,7 @@ export class Thing {
   }
 
   [Symbol.asyncIterator]() {
-    let saved
+    let buffered = []
     let deferred
     const dispose = observe(this, {
       next: (value) => {
@@ -138,7 +138,7 @@ export class Thing {
           deferred.resolve({ value, done: false })
           deferred = null
         } else {
-          saved = { value, done: false }
+          buffered.push({ value, done: false })
         }
       },
       error: (e) => {
@@ -146,7 +146,7 @@ export class Thing {
           deferred.reject(e)
           deferred = null
         } else {
-          saved = { value: e, done: true, error: true }
+          buffered.push({ value: e, done: true, error: true })
         }
       },
       complete: () => {
@@ -154,15 +154,14 @@ export class Thing {
           deferred.resolve({ done: true })
           deferred = null
         } else {
-          saved = { done: true }
+          buffered.push({ done: true })
         }
       },
     })
     return {
       next: () => {
-        if (saved) {
-          const result = saved
-          saved = null
+        if (buffered.length > 0) {
+          const result = buffered.shift()
           return result.error
             ? Promise.reject(result.value)
             : Promise.resolve(result)
